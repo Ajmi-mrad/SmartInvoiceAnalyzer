@@ -1,0 +1,58 @@
+in schemas.py 
+What orm_mode = True does:
+🔄 Automatic Conversion: SQLAlchemy ↔ Pydantic
+
+What happens behind the scenes:
+Database returns: SQLAlchemy User object
+<User(id=1, username="john", password_hash="$2b$12$...")>
+
+Pydantic converts to: JSON response
+{
+  "id": 1,
+  "username": "john"
+}
+Notice: password_hash is automatically excluded (not in UserOut schema)
+
+What happens WITHOUT orm_mode = True
+
+# This would give you an error:
+return db_user  # TypeError: Object of type User is not JSON serializable
+
+# You'd need to do this manually:
+return UserOut(
+    id=db_user.id,
+    username=db_user.username
+)
+
+in comments.txt
+
+What is bcrypt?
+CryptContext(schemes=["bcrypt"]) uses bcrypt algorithm:
+
+in crud.py
+
+db_invoice = models.Invoice(**invoice.dict(), user_id=user_id)
+
+1.invoice.dict()
+# Converts InvoiceCreate to dictionary
+invoice.dict()
+# Returns: {
+#     "supplier": "ABC Company",
+#     "total_amount": 1500.50,
+#     "file_path": "/uploads/invoice.pdf"
+# }
+
+2.**invoice.dict()
+# Unpacks dictionary as keyword arguments
+**{"supplier": "ABC Company", "total_amount": 1500.50, "file_path": "/uploads/invoice.pdf"}
+
+# Becomes:
+supplier="ABC Company", total_amount=1500.50, file_path="/uploads/invoice.pdf"
+
+3.
+models.Invoice(
+    supplier="ABC Company",      # From **invoice.dict()
+    total_amount=1500.50,        # From **invoice.dict()
+    file_path="/uploads/invoice.pdf",  # From **invoice.dict()
+    user_id=user_id              # Added separately
+)
