@@ -35,3 +35,10 @@ httpx==0.25.2
 
 # Environment Variables
 python-dotenv==1.0.0
+
+# Additional Libraries for OCR + LLM   
+PyMuPDF==1.23.8
+google-generativeai==0.3.2
+aiofiles==23.2.0
+pytesseract==0.3.13
+pillow==10.1.0

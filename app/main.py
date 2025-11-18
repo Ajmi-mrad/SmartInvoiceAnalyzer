@@ -1,6 +1,13 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
-from . import database, models, schemas, crud, utils, auth
+from . import database, models, schemas, crud, utils, auth, ocr, llm
+import tempfile
+import os
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Create database tables
 models.Base.metadata.create_all(bind=database.engine)
@@ -72,17 +79,41 @@ def update_invoice(
     
     return updated_invoice
 
-@app.delete("/invoices/{invoice_id}")
-def delete_invoice(
-    invoice_id: int,
+@app.post("/invoices/upload")
+async def upload_invoice_pdf(
+    file: UploadFile = File(...),
     current_user: models.User = Depends(auth.get_current_user),
     db: Session = Depends(database.get_db)
 ):
-    """Delete an invoice"""
-    # Single function call, single database query
-    success = crud.delete_invoice(db, invoice_id, current_user.id)
+    """Upload PDF invoice and extract data with enhanced OCR"""
     
-    if not success:
-        raise HTTPException(status_code=404, detail="Invoice not found")
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No file selected")
     
-    return {"message": "Invoice deleted successfully"}
+    if not file.filename.endswith('.pdf'):
+        raise HTTPException(status_code=400, detail="Only PDF files allowed")
+    
+    try:
+        # Read PDF
+        pdf_content = await file.read()
+        
+        if len(pdf_content) == 0:
+            raise HTTPException(status_code=400, detail="File is empty")
+        
+        # Enhanced OCR extraction
+        logger.info(f"Starting enhanced OCR extraction for {file.filename}")
+        extraction_result = ocr.extract_pdf_auto(pdf_content)
+        
+     
+        # Check if extraction was successful
+        if not extraction_result["extraction_successful"]:
+            logger.warning(f"OCR extraction had issues: {extraction_result['text']}")
+        
+        extracted_text = extraction_result["text"]
+        logger.info(f"Enhanced OCR extracted {len(extracted_text)} characters using {extraction_result['pdf_type']} method")
+        llm_data = llm.analyze_invoice_text(extracted_text)
+        return llm_data  
+        
+    except Exception as e:
+        logger.error(f"Upload processing failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
