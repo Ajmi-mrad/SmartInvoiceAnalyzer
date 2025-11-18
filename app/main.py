@@ -9,6 +9,11 @@ app = FastAPI(title="Smart Invoice Analyzer")
 
 @app.post("/auth/register", response_model=schemas.UserOut)
 def register(user: schemas.UserCreate, db: Session = Depends(database.get_db)):
+    # Check if user already exists
+    existing_user = db.query(models.User).filter(models.User.username == user.username).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Username already registered")
+    
     return crud.create_user(db, user)
 
 @app.post("/auth/login")
@@ -16,13 +21,14 @@ def login(user: schemas.UserCreate, db: Session = Depends(database.get_db)):
     db_user = db.query(models.User).filter(models.User.username == user.username).first()
     
     if not db_user or not utils.verify_password(user.password, db_user.password_hash):
-        raise HTTPException(status_code=401,
-                            detail="Invalid credentials")
+        raise HTTPException(status_code=401, detail="Invalid credentials")
     
     token = auth.create_access_token({"sub": db_user.username})
-    return {"access_token": token,
-            "token_type": "bearer",
-            "user": schemas.UserOut.from_orm(db_user)}
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": schemas.UserOut.model_validate(db_user)  # Fixed this line
+    }
 
 @app.post("/invoices/", response_model=schemas.InvoiceOut)
 def create_invoice(invoice: schemas.InvoiceCreate, current_user=Depends(auth.get_current_user), db: Session = Depends(database.get_db)):
